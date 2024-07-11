@@ -1,0 +1,13 @@
+@backendAPI_HostAddress = http://localhost:16610
+
+GET {{backendAPI_HostAddress}}/FollowedCase/1
+Accept: application/json
+####
+
+GET {{backendAPI_HostAddress}}/api/Case/2024061920003007
+Accept: application/json
+###
+
+GET {{backendAPI_HostAddress}}/api/Case/20240619  
+Accept: application/json
+###
