@@ -1,4 +1,4 @@
-﻿namespace BackendAPI.Utilities;
+﻿namespace BackendAPI.Controller;
 
 using Ardalis.Result;
 using BackendAPI.Models;
@@ -17,5 +17,10 @@ public static class AppUtilities
             _ => controller.StatusCode(500, new ApiResponse<T> { Errors = result.Errors, IsSuccess = false }),
         };
     }
-    
+
+    public static string EnsureRemoveNewLineWhenLog(this ControllerBase controller, string msg)
+    {
+        return msg.Replace(Environment.NewLine, string.Empty);
+    }
+
 }

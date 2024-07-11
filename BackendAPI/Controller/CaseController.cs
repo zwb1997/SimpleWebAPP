@@ -23,6 +23,7 @@ public class CaseController : ControllerBase
     [HttpGet("{caseId}")]
     public async Task<IActionResult> GetCase(string caseId)
     {
+        caseId = this.EnsureRemoveNewLineWhenLog(caseId);
         if (string.IsNullOrWhiteSpace(caseId))
         {
             return this.BuildResponse(Result<string>.Error("Case ID is required."));

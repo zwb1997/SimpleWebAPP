@@ -1,19 +1,16 @@
-﻿using System.ComponentModel.DataAnnotations;
-using BackendAPI.Models;
-using BackendAPI.Models.DTO;
-using Microsoft.AspNetCore.Mvc.ModelBinding;
+﻿namespace BackendAPI.Controller;
 
-namespace BackendAPI.Controller;
-
-using Ardalis.Result;
-using BackendAPI.Models.Tables;
-using BackendAPI.Models.DTO;
-using BackendAPI.Services;
-using BackendAPI.Utilities;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
 using System;
 using System.Threading.Tasks;
+using System.ComponentModel.DataAnnotations;
+using Ardalis.Result;
+using BackendAPI.Models;
+using BackendAPI.Models.DTO;
+using BackendAPI.Models.Tables;
+using BackendAPI.Services;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+
 
 [Route("api/[controller]")]
 [ApiController]
@@ -54,10 +51,13 @@ public class FollowedCaseController : ControllerBase
             return this.BuildResponse(errorResult);
         }
 
+        caseId = this.EnsureRemoveNewLineWhenLog(caseId);
+        whoFollow = this.EnsureRemoveNewLineWhenLog(whoFollow);
+
         List<CaseFollowModel> checkList = _followedCaseService.QueryCases(new CaseFollowDTO
         {
-            CaseID = caseId ?? string.Empty,
-            WhoFollowed = whoFollow ?? string.Empty
+            CaseID = caseId,
+            WhoFollowed = whoFollow
         }).Result.Value;
 
         if (checkList.Any())
@@ -99,13 +99,6 @@ public class FollowedCaseController : ControllerBase
             return this.BuildResponse(errorResult);
         }
 
-
-        var queryModel = new QueryModel
-        {
-            CaseId = caseFollowModel.CaseID,
-            WhoFollowed = caseFollowModel.WhoFollowed,
-        };
-
         var results = await _followedCaseService.DoFollowCaseByCaseIdAndUserName(caseFollowModel);
 
         return this.BuildResponse(results);
@@ -122,7 +115,7 @@ public class FollowedCaseController : ControllerBase
         }
 
         Guid dataGUID = Guid.Empty;
-        Guid.TryParse(dataId, out dataGUID);
+        Guid.TryParse(dataId.Trim(), out dataGUID);
 
         if (dataGUID == Guid.Empty)
         {
