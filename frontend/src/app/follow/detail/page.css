@@ -1,0 +1,6 @@
+.right-nection p{
+  padding: 0 2em 0 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}

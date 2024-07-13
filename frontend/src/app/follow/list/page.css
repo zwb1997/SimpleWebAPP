@@ -1,0 +1,7 @@
+.action {
+  color: blue;
+  cursor: pointer;
+}
+.action span {
+  margin: 0 5px 0 0
+}
