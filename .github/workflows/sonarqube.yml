@@ -1,4 +1,4 @@
-name: Code Analysis
+name: Code Quality
 
 on:
   push:
@@ -9,34 +9,63 @@ on:
       - main
 
 jobs:
-  sonarQube:
+  format:
+    name: Check Formatting
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v2
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v3
+        uses: actions/setup-dotnet@v2
         with:
-          dotnet-version: '8.x'
+          dotnet-version: '6.0.x'
 
-      - name: Install SonarScanner for MSBuild
-        run: dotnet tool install --global dotnet-sonarscanner
+      - name: Install dotnet-format
+        run: dotnet tool install -g dotnet-format
 
-      - name: Cache SonarQube binaries
-        uses: actions/cache@v3
+      - name: Run dotnet-format and save output
+        run: |
+          mkdir -p reports
+          dotnet format --check > reports/formatting_report.txt
+        continue-on-error: true
+
+      - name: Upload formatting report
+        uses: actions/upload-artifact@v2
+        with:
+          name: formatting-report
+          path: reports/formatting_report.txt
+
+  sonarcloud:
+    name: SonarCloud Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v2
+        with:
+          dotnet-version: '6.0.x'
+
+      - name: Cache SonarCloud packages
+        uses: actions/cache@v2
         with:
           path: ~/.sonar/cache
           key: ${{ runner.os }}-sonar
 
-      - name: Build solution
-        run: dotnet build SimpleWebApplication.sln
+      - name: Restore dependencies
+        run: dotnet restore
 
-      - name: Run SonarQube Scanner
+      - name: Install SonarScanner for .NET
+        run: dotnet tool install --global dotnet-sonarscanner
+
+      - name: SonarCloud Scan
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
-          dotnet-sonarscanner begin /k:"my_project_key" /d:sonar.login="${{ secrets.SONAR_TOKEN }}" /d:sonar.organization="Liquidatacq" /d:sonar.host.url="https://sonarcloud.io"
-          dotnet build SimpleWebApplication.sln
+          dotnet-sonarscanner begin /k:"your_project_key" /o:"Liquidatacq" /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
+          dotnet build
           dotnet-sonarscanner end /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
