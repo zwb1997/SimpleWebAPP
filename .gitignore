@@ -13,6 +13,7 @@ liquidatacq.com_tomcat/
 *.doc
 appsettings.json
 appsettings.Development.json
+appsettings.*.json
 *.zip
 *postman*
 *.pfx

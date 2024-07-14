@@ -1,9 +1,7 @@
 ﻿namespace BackendAPI.Controller;
 
 using Ardalis.Result;
-using BackendAPI.Models.Tables;
 using BackendAPI.Services;
-using BackendAPI.Utilities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 

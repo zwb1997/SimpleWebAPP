@@ -2,10 +2,18 @@
 
 using BackendAPI.Models.Tables;
 using BackendAPI.Services;
+using System.Security.Cryptography;
 
 public class SyncedFromMainService : IHostedService, IDisposable
 {
+    /// <summary>
+    /// Create a number generator
+    /// </summary>
+    private static RandomNumberGenerator _randomNumberGenerator = RandomNumberGenerator.Create();
 
+    /// <summary>
+    /// Mock case severity only in ["A", "B", "C"]
+    /// </summary>
     private static readonly string[] SEV = ["A", "B", "C"];
 
     private readonly ILogger<SyncedFromMainService> _logger;
@@ -49,7 +57,7 @@ public class SyncedFromMainService : IHostedService, IDisposable
             var queryResult = _followedCaseService.QueryCases(new CaseFollowDTO());
 
             // Ensure we do not use .Result, which can block. Use await instead.
-            List<CaseFollowModel> currentValues = queryResult.Result.Value;
+            List<CaseFollowModel> currentValues = queryResult.Result.Value.Value;
 
             _logger.LogInformation("Mock for change every followed cases [CurrentSyncedTime] to DateTime.Now");
 
@@ -76,13 +84,31 @@ public class SyncedFromMainService : IHostedService, IDisposable
         {
             return currentSev;
         }
-        string newSev = SEV[new Random().Next(3)];
+        string newSev = SEV[GetRandomLimitNumber(3)];
         if (newSev.Equals(currentSev))
         {
             return GetRandomCaseSev(currentSev, deep + 1);
         }
 
         return newSev;
+    }
+
+    // Ensure result is uniform distributed
+    private int GetRandomLimitNumber(int maxValue)
+    {
+        byte[] data = new byte[4];
+        int result;
+
+        do
+        {
+            _randomNumberGenerator.GetBytes(data);
+            // result can be generated between [0,int.MaxValue]
+            result = BitConverter.ToInt32(data, 0) & int.MaxValue;
+
+            //this line ensure result < int.MaxValue - 1
+        } while (result >= maxValue * (int.MaxValue / maxValue));
+
+        return result % maxValue;
     }
 
     public void Dispose()

@@ -1,11 +1,10 @@
-﻿using EFCore.BulkExtensions;
-
-namespace BackendAPI.Services.impl;
+﻿namespace BackendAPI.Services.impl;
 
 using Ardalis.Result;
-using BackendAPI.Data;
-using BackendAPI.Models.Tables;
-using BackendAPI.Services;
+using Data;
+using Models.Tables;
+using Services;
+using Controller;
 using Microsoft.EntityFrameworkCore;
 using EFCore.BulkExtensions;
 using Microsoft.Extensions.Logging;
@@ -14,6 +13,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.IdentityModel.Tokens;
+using System.Linq.Expressions;
+using AutoMapper;
+using LinqKit;
 
 public class FollowedCaseService : IFollowedCaseService
 {
@@ -23,15 +25,32 @@ public class FollowedCaseService : IFollowedCaseService
 
     private readonly ICaseService _caseService;
 
-    public FollowedCaseService(AppDBContext dbContext, ILogger<FollowedCaseService> logger, ICaseService caseService)
+    private readonly IMapper _caseFollowMapper;
+
+    public FollowedCaseService(
+        AppDBContext dbContext,
+        ILogger<FollowedCaseService> logger,
+        ICaseService caseService,
+        IMapper caseFollowMapper)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _caseService = caseService ?? throw new ArgumentNullException(nameof(caseService));
+        _caseFollowMapper = caseFollowMapper ?? throw new ArgumentNullException(nameof(caseFollowMapper));
     }
 
     public async Task<Result<List<CaseFollowModel>>> DoFollowCaseByCaseIdAndUserName(CaseFollowDTO queryModel)
     {
+        queryModel.CaseID = AppUtilities.EnsureRemoveNewLineWhenLog(queryModel.CaseID ?? string.Empty);
+
+        if (string.IsNullOrWhiteSpace(queryModel.CaseID))
+        {
+            string errorMsg =
+                $"Follow case ID: [{queryModel.CaseID}] failed, case id is empty.";
+            _logger.LogError(errorMsg);
+            return Result<List<CaseFollowModel>>.Error(errorMsg);
+        }
+
         var caseRecords = await _caseService.QueryCaseByCaseId(queryModel.CaseID);
 
         // If the case is invalid
@@ -48,42 +67,34 @@ public class FollowedCaseService : IFollowedCaseService
 
     public async Task<Result<PagedResult<List<CaseFollowModel>>>> QueryCases(CaseFollowDTO queryModel)
     {
-        var caseQuery = _dbContext.CaseFollowModel.AsQueryable();
+        var predicate = PredicateBuilder.New<CaseFollowModel>(true);
+        
 
-        if (!string.IsNullOrEmpty(queryModel.CaseStatus))
+        var conditions = new List<(bool condition, Expression<Func<CaseFollowModel, bool>> predicate)>
         {
-            caseQuery = caseQuery.Where(c => c.CaseStatus == queryModel.CaseStatus);
-        }
+            ( !string.IsNullOrEmpty(queryModel.CaseStatus), c => c.CaseStatus == queryModel.CaseStatus.Trim() ),
+            ( !string.IsNullOrEmpty(queryModel.CaseID), c => c.CaseID == queryModel.CaseID.Trim() ),
+            ( !string.IsNullOrEmpty(queryModel.CaseSubject), c => c.CaseSubject.Contains(queryModel.CaseSubject.Trim()) ),
+            ( !string.IsNullOrEmpty(queryModel.Remark), c => c.Remark.Contains(queryModel.Remark.Trim()) ),
+            ( !string.IsNullOrEmpty(queryModel.CaseSev), c => c.CaseSev == queryModel.CaseSev.Trim() ),
+            ( !string.IsNullOrEmpty(queryModel.WhoFollowed), c => c.WhoFollowed == queryModel.WhoFollowed.Trim() ),
+            ( queryModel.IsArchive.HasValue, c => c.IsArchive == queryModel.IsArchive.Value)
+        };
 
-        if (!string.IsNullOrEmpty(queryModel.CaseID))
+        foreach (var (condition, pred) in conditions)
         {
-            caseQuery = caseQuery.Where(c => c.CaseID == queryModel.CaseID);
-        }
-
-        if (!string.IsNullOrEmpty(queryModel.CaseSubject))
-        {
-            caseQuery = caseQuery.Where(c => c.CaseSubject.StartsWith(queryModel.CaseSubject));
-        }
-
-        if (!string.IsNullOrEmpty(queryModel.CaseSev))
-        {
-            caseQuery = caseQuery.Where(c => c.CaseSev.Equals(queryModel.CaseSev));
-        }
-
-        if (!string.IsNullOrEmpty(queryModel.WhoFollowed))
-        {
-            caseQuery = caseQuery.Where(c => c.WhoFollowed.Equals(queryModel.WhoFollowed));
-        }
-
-        if (queryModel.IsArchive.HasValue)
-        {
-            caseQuery = caseQuery.Where(c => c.IsArchive.Value == queryModel.IsArchive.Value);
+            if (condition)
+            {
+                predicate = predicate.And(pred);
+            }
         }
         
+        var caseQuery = _dbContext.CaseFollowModel.AsQueryable().AsExpandable().Where(predicate);
+
         var totalRecords = await caseQuery.CountAsync();
 
         var cases = await caseQuery
-            .OrderBy(v=>v.FollowedTime)
+            .OrderBy(v => v.FollowedTime)
             .Skip((queryModel.PageNumber - 1) * queryModel.RowsPerPage)
             .Take(queryModel.RowsPerPage)
             .ToListAsync();
@@ -122,19 +133,19 @@ public class FollowedCaseService : IFollowedCaseService
     /// <param name="queryModel"></param>
     /// <returns></returns>
     private async Task<Result<List<CaseFollowModel>>> DoUpdateCurrentFollowCaseModel(
-        CaseFollowModel existingCaseFollowModel, CaseFollowDTO queryModel)
+        CaseFollowModel existingCaseFollowModel, CaseFollowDTO? queryModel)
     {
         if (queryModel == null)
         {
             string errorMsg =
-                $"You are trying to UPDATE existed followed case: [{queryModel.CaseID}], followed by: [{queryModel.WhoFollowed}], but no updates provided.";
+                $"You are trying to UPDATE existed followed case: [{existingCaseFollowModel.CaseID}], followed by: [{existingCaseFollowModel.WhoFollowed}], but have not provided the update objects";
             _logger.LogError(errorMsg);
             return Result<List<CaseFollowModel>>.Error(errorMsg);
         }
 
         try
         {
-            SetUpProperties(existingCaseFollowModel, queryModel);
+            SetupUpdateProperties(existingCaseFollowModel, queryModel);
             _dbContext.CaseFollowModel.Update(existingCaseFollowModel);
             await _dbContext.SaveChangesAsync();
             // await _dbContext.SaveChangesAsync();
@@ -152,64 +163,17 @@ public class FollowedCaseService : IFollowedCaseService
         }
     }
 
-    private void SetUpProperties(CaseFollowModel existingCaseFollowModel, CaseFollowDTO queryModel)
+    private void SetupUpdateProperties(CaseFollowModel existingCaseFollowModel, CaseFollowDTO queryModel)
     {
         if (existingCaseFollowModel == null || queryModel == null)
         {
             throw new NullReferenceException("When do update, CaseFollowModel obj and CaseFollowDTO both cannot empty");
         }
-
-        // DataId should not be modify
-        // existingCaseFollowModel.DataId;
-        existingCaseFollowModel.CaseSubject = string.IsNullOrWhiteSpace(queryModel.CaseSubject?.Trim())
-            ? existingCaseFollowModel.CaseSubject
-            : queryModel.CaseSubject?.Trim();
-
-        existingCaseFollowModel.CaseSev = string.IsNullOrWhiteSpace(queryModel.CaseSev?.Trim())
-            ? existingCaseFollowModel.CaseSev
-            : queryModel.CaseSev?.Trim();
-
-
-        existingCaseFollowModel.CaseStatus = string.IsNullOrWhiteSpace(queryModel.CaseStatus?.Trim())
-            ? existingCaseFollowModel.CaseStatus
-            : queryModel.CaseStatus?.Trim();
-
-        existingCaseFollowModel.CurrentCaseOwner = string.IsNullOrWhiteSpace(queryModel.CurrentCaseOwner?.Trim())
-            ? existingCaseFollowModel.CurrentCaseOwner
-            : queryModel.CurrentCaseOwner?.Trim();
-
-        existingCaseFollowModel.FollowedTime = queryModel.FollowedTime != null && queryModel.FollowedTime.HasValue
-            ? queryModel.FollowedTime.Value
-            : existingCaseFollowModel.FollowedTime;
-
-        existingCaseFollowModel.Remark = string.IsNullOrWhiteSpace(queryModel.Remark?.Trim())
-            ? existingCaseFollowModel.Remark
-            : queryModel.Remark?.Trim();
-
-        existingCaseFollowModel.Resolution = string.IsNullOrWhiteSpace(queryModel.Resolution?.Trim())
-            ? existingCaseFollowModel.Resolution
-            : queryModel.Resolution?.Trim();
-
-        existingCaseFollowModel.IsArchive = queryModel.IsArchive != null && queryModel.IsArchive.HasValue
-            ? queryModel.IsArchive.Value
-            : existingCaseFollowModel.IsArchive;
-
-        existingCaseFollowModel.IsClosed = queryModel.IsClosed != null && queryModel.IsClosed.HasValue
-            ? queryModel.IsClosed.Value
-            : existingCaseFollowModel.IsClosed;
-
-        existingCaseFollowModel.LastSyncedTime = queryModel.LastSyncedTime != null && queryModel.LastSyncedTime.HasValue
-            ? queryModel.LastSyncedTime.Value
-            : existingCaseFollowModel.LastSyncedTime;
-
-        existingCaseFollowModel.CurrentSyncedTime =
-            queryModel.CurrentSyncedTime != null && queryModel.CurrentSyncedTime.HasValue
-                ? queryModel.CurrentSyncedTime.Value
-                : existingCaseFollowModel.CurrentSyncedTime;
-
-        existingCaseFollowModel.WhoFollowed = string.IsNullOrWhiteSpace(queryModel.WhoFollowed?.Trim())
-            ? existingCaseFollowModel.WhoFollowed
-            : queryModel.WhoFollowed?.Trim();
+        
+        // DataId should not be modified
+        var dataId = existingCaseFollowModel.DataId;
+        _caseFollowMapper.Map(queryModel, existingCaseFollowModel);
+        existingCaseFollowModel.DataId = dataId;
     }
 
     /// <summary>
@@ -219,6 +183,8 @@ public class FollowedCaseService : IFollowedCaseService
     /// <returns></returns>
     private async Task<Result<List<CaseFollowModel>>> DoInsertNewFollow(CaseFollowDTO queryModel)
     {
+        queryModel.CaseID = AppUtilities.EnsureRemoveNewLineWhenLog(queryModel.CaseID);
+
         var caseModel = (await _caseService.QueryCaseByCaseId(queryModel.CaseID)).Value?.FirstOrDefault();
 
         if (caseModel == null)
@@ -251,6 +217,9 @@ public class FollowedCaseService : IFollowedCaseService
 
     public async Task<Result<List<CaseFollowModel>>> GetFollowCaseByCaseId(CaseFollowDTO queryModel)
     {
+        queryModel.CaseID = AppUtilities.EnsureRemoveNewLineWhenLog(queryModel.CaseID ?? string.Empty);
+        queryModel.WhoFollowed = AppUtilities.EnsureRemoveNewLineWhenLog(queryModel.WhoFollowed ?? string.Empty);
+
         _logger.LogInformation(
             "Checking case id: [{CaseId}] whether followed by User: [{WhoFollowed}]",
             queryModel.CaseID, queryModel.WhoFollowed);
@@ -324,6 +293,7 @@ public class FollowedCaseService : IFollowedCaseService
                 {
                     return true;
                 }
+
                 return false;
             }).ToList();
 
@@ -333,25 +303,22 @@ public class FollowedCaseService : IFollowedCaseService
                 $"Followed Case=[{v}] has been updated since the CurrentSyncedTime is greater than LastSyncedTime");
             v.IsSynced = true;
         });
-        
+
         Result<List<CaseFollowModel>> result = Result<List<CaseFollowModel>>.Success(new List<CaseFollowModel>(updatedCases));
-        
-        updatedCases.ForEach(v =>
-        {
-            v.LastSyncedTime = v.CurrentSyncedTime;
-        });
+
+        updatedCases.ForEach(v => { v.LastSyncedTime = v.CurrentSyncedTime; });
 
         _logger.LogInformation("Prepare to async override the updatedCases LastSyncedTime");
         this.BatchUpdate(updatedCases);
-        
+
         return result;
     }
 
     /// <summary>
     /// batch update cases with case list
     /// </summary>
-    /// <param name="cases"></param>
-    /// <returns></returns>
+    /// <param name="caseFollowModels">The preparation List to be updated</param>
+    /// <returns>void</returns>
     public void BatchUpdate(List<CaseFollowModel> caseFollowModels)
     {
         try
@@ -365,5 +332,5 @@ public class FollowedCaseService : IFollowedCaseService
             throw; // Re-throw the exception to be handled at a higher level if needed
         }
     }
-    
+
 }

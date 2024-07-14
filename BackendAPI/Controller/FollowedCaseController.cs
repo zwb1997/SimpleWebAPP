@@ -89,7 +89,10 @@ public class FollowedCaseController : ControllerBase
             return this.BuildResponse(errorResult);
         }
 
-        Guid dataID = caseFollowModel.DataId;
+        caseFollowModel.CaseID = this.EnsureRemoveNewLineWhenLog(caseFollowModel.CaseID);
+        caseFollowModel.WhoFollowed = this.EnsureRemoveNewLineWhenLog(caseFollowModel.WhoFollowed);
+        Guid dataID;
+        Guid.TryParse(this.EnsureRemoveNewLineWhenLog(caseFollowModel.DataId.ToString()), out dataID);
 
         if (dataID == Guid.Empty)
         {
@@ -107,6 +110,8 @@ public class FollowedCaseController : ControllerBase
     [HttpGet("FollowedCase/{dataId}")]
     public async Task<IActionResult> GetSingleFollowedCaseByDataId(string dataId)
     {
+        dataId = this.EnsureRemoveNewLineWhenLog(dataId);
+
         if (string.IsNullOrEmpty(dataId))
         {
             var errorResult = Result<string>.Error("DataID is required.");
@@ -159,6 +164,8 @@ public class FollowedCaseController : ControllerBase
     [HttpGet("SyncedCase/{whoFollowed}")]
     public async Task<IActionResult> IsSynced([Required] string whoFollowed)
     {
+        whoFollowed = this.EnsureRemoveNewLineWhenLog(whoFollowed);
+
         _logger.LogInformation($"Fetching cases followed by: {whoFollowed}");
         var result = await _followedCaseService.CheckAnyCaseSynced(whoFollowed);
         return this.BuildResponse(result);

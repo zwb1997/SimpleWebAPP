@@ -18,9 +18,14 @@ public static class AppUtilities
         };
     }
 
-    public static string EnsureRemoveNewLineWhenLog(this ControllerBase controller, string msg)
+    public static string EnsureRemoveNewLineWhenLog(this ControllerBase controller, string processStr)
     {
-        return msg.Replace(Environment.NewLine, string.Empty);
+        return processStr.Replace(Environment.NewLine, string.Empty);
+    }
+
+    public static string EnsureRemoveNewLineWhenLog(string processStr)
+    {
+        return processStr.Replace(Environment.NewLine, string.Empty);
     }
 
 }

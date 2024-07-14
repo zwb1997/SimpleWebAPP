@@ -15,6 +15,7 @@ using Newtonsoft.Json.Converters;
 using NLog.Config;
 using NLog.Web;
 using System.Net;
+using BackendAPI.Models.Mapper;
 
 public class BackendApplication
 {
@@ -134,5 +135,7 @@ public class BackendApplication
         builder.Services.AddScoped<ICaseService, CaseService>();
         builder.Services.AddScoped<IFollowedCaseService, FollowedCaseService>();
         builder.Services.AddSingleton<IHostedService, SyncedFromMainService>();
+
+        builder.Services.AddAutoMapper(typeof(CaseFollowMappingProfile));
     }
 }
