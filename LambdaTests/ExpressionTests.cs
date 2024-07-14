@@ -1,5 +1,6 @@
 using LinqKit;
 using System.Linq.Expressions;
+using System.Security.Cryptography;
 
 namespace LambdaTests;
 
@@ -51,6 +52,33 @@ public class ExpressionTests
         foreach (var product in filterProducts)
         {
             Console.WriteLine($"{product.Name} - {product.Price}");
+        }
+    }
+
+
+    [TestMethod]
+    public void CreateToken()
+    {
+        Guid id = Guid.NewGuid();
+        Console.WriteLine(id.ToString());
+    }
+
+    [TestMethod]
+    public void CreateASEToken()
+    {
+        Guid guid = Guid.NewGuid();
+
+        byte[] bytes = guid.ToByteArray();
+
+        using (SHA256 sha = SHA256.Create())
+        {
+            byte[] hashBytes = sha.ComputeHash(bytes);
+
+            string token = Convert.ToBase64String(hashBytes);
+
+            // Optional: Remove any special characters to make the token URL-safe
+            token = token.Replace('+', '-').Replace('/', '_').Replace("=", "");
+            Console.WriteLine(token);
         }
     }
 }

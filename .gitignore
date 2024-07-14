@@ -11,9 +11,8 @@ liquidatacq.com_tomcat/
 .idea
 *.docx
 *.doc
-appsettings.json
+appsettings-local.json
 appsettings.Development.json
-appsettings.*.json
 *.zip
 *postman*
 *.pfx

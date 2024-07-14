@@ -68,12 +68,12 @@ public class FollowedCaseService : IFollowedCaseService
     public async Task<Result<PagedResult<List<CaseFollowModel>>>> QueryCases(CaseFollowDTO queryModel)
     {
         var predicate = PredicateBuilder.New<CaseFollowModel>(true);
-        
+
 
         var conditions = new List<(bool condition, Expression<Func<CaseFollowModel, bool>> predicate)>
         {
             ( !string.IsNullOrEmpty(queryModel.CaseStatus), c => c.CaseStatus == queryModel.CaseStatus.Trim() ),
-            ( !string.IsNullOrEmpty(queryModel.CaseID), c => c.CaseID == queryModel.CaseID.Trim() ),
+            ( !string.IsNullOrEmpty(queryModel.CaseID), c => c.CaseID.Contains(queryModel.CaseID.Trim()) ),
             ( !string.IsNullOrEmpty(queryModel.CaseSubject), c => c.CaseSubject.Contains(queryModel.CaseSubject.Trim()) ),
             ( !string.IsNullOrEmpty(queryModel.Remark), c => c.Remark.Contains(queryModel.Remark.Trim()) ),
             ( !string.IsNullOrEmpty(queryModel.CaseSev), c => c.CaseSev == queryModel.CaseSev.Trim() ),
@@ -88,7 +88,7 @@ public class FollowedCaseService : IFollowedCaseService
                 predicate = predicate.And(pred);
             }
         }
-        
+
         var caseQuery = _dbContext.CaseFollowModel.AsQueryable().AsExpandable().Where(predicate);
 
         var totalRecords = await caseQuery.CountAsync();
@@ -169,7 +169,7 @@ public class FollowedCaseService : IFollowedCaseService
         {
             throw new NullReferenceException("When do update, CaseFollowModel obj and CaseFollowDTO both cannot empty");
         }
-        
+
         // DataId should not be modified
         var dataId = existingCaseFollowModel.DataId;
         _caseFollowMapper.Map(queryModel, existingCaseFollowModel);
